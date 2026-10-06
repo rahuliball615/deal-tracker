@@ -1,0 +1,44 @@
+name: Deal Tracker
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: tracker
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: pip install requests beautifulsoup4 cloudscraper lxml
+
+      - name: Run tracker
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT: ${{ secrets.TG_CHAT }}
+        run: python tracker.py
+
+      - name: Save state
+        run: |
+          git config user.name "deal-tracker"
+          git config user.email "bot@users.noreply.github.com"
+          git add tracker_state.json || true
+          git diff --staged --quiet || git commit -m "state $(date -u +%Y-%m-%d_%H:%M)"
+          git push || true
