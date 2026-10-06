@@ -1,5 +1,5 @@
 """Deal Tracker — Amazon, Flipkart, Croma, Reliance + Telegram commands"""
-import json, os, re, time, random, urllib.parse, urllib.request
+import json, os, re, time, random, urllib.parse, urllib.request, urllib.error
 from datetime import datetime
 from pathlib import Path
 
@@ -160,19 +160,35 @@ def send_tg(text, chat_id=None):
     cid = chat_id or TG_CHAT
     if not TG_TOKEN or not cid:
         log("[!] TG secrets missing")
-        return
-    try:
-        data = urllib.parse.urlencode({
-            "chat_id": cid, "text": text,
-            "parse_mode": "HTML",
-            "disable_web_page_preview": "true",
-        }).encode()
+        return False
+
+    def _post(payload):
+        data = urllib.parse.urlencode(payload).encode()
         req = urllib.request.Request(
             f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage", data=data)
-        urllib.request.urlopen(req, timeout=15)
-        log(f"[+] TG sent")
-    except Exception as e:
-        log(f"[!] TG err: {str(e)[:60]}")
+        try:
+            r = urllib.request.urlopen(req, timeout=15)
+            body = json.loads(r.read().decode())
+            return body.get("ok", False), body
+        except urllib.error.HTTPError as e:
+            return False, e.read().decode()[:300]
+        except Exception as e:
+            return False, str(e)[:200]
+
+    base = {"chat_id": cid, "text": text, "disable_web_page_preview": "true"}
+    ok, body = _post({**base, "parse_mode": "HTML"})
+    if ok:
+        log("[+] TG sent")
+        return True
+
+    log(f"[!] TG HTML fail: {body}")
+    ok2, body2 = _post(base)
+    if ok2:
+        log("[+] TG sent (plain fallback)")
+        return True
+
+    log(f"[!] TG plain fail: {body2}")
+    return False
 
 
 def tg_get_updates(offset):
@@ -213,14 +229,22 @@ def save_watchlist(wl):
 def load_state():
     if STATE_FILE.exists():
         try:
-            return json.loads(STATE_FILE.read_text())
+            raw = json.loads(STATE_FILE.read_text())
+            return {
+                "products": raw.get("products", {}),
+                "last_update_id": raw.get("last_update_id", 0),
+            }
         except Exception:
             pass
     return {"products": {}, "last_update_id": 0}
 
 
 def save_state(state):
-    STATE_FILE.write_text(json.dumps(state, indent=2))
+    clean = {
+        "products": state.get("products", {}),
+        "last_update_id": state.get("last_update_id", 0),
+    }
+    STATE_FILE.write_text(json.dumps(clean, indent=2))
 
 
 # ═══════════════════════════════════════════════
@@ -276,7 +300,6 @@ def handle_command(text, chat_id, wl):
             send_tg("Yeh URL pehle se watchlist mein hai", chat_id)
             return False
 
-        # Verify URL
         send_tg("⏳ URL check kar raha...", chat_id)
         html = fetch(url)
         if not html:
@@ -354,6 +377,7 @@ def process_telegram(state):
     changed = False
     for u in updates:
         state["last_update_id"] = max(state.get("last_update_id", 0), u.get("update_id", 0))
+        changed = True
         msg = u.get("message") or {}
         text = msg.get("text", "")
         chat_id = msg.get("chat", {}).get("id")
@@ -444,7 +468,6 @@ def main():
 
     state = load_state()
 
-    # 1. Telegram commands process
     try:
         cmd_changed = process_telegram(state)
         if cmd_changed:
@@ -452,7 +475,6 @@ def main():
     except Exception as e:
         log(f"[!] tg process: {e}")
 
-    # 2. Watchlist check
     wl = load_watchlist()
     if not wl:
         log("[!] watchlist khaali")
