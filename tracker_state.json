@@ -2,15 +2,15 @@
   "products": {
     "https://www.croma.com/apple-iphone-17-pro-256gb-deep-blue-/p/317418": {
       "name": "iPhone 17 Pro 256GB Deep Blue",
-      "price": 128490.0,
+      "price": 125990.0,
       "in_stock": true,
-      "checked_at": "2026-10-08T04:10:18.039434"
+      "checked_at": "2026-10-08T11:25:14.979887"
     },
     "https://www.croma.com/sony-playstation-5-slim-1tb-ssd-gaming-console-white-/p/305985": {
       "name": "PS5 Slim 1TB Disc Edition",
       "price": 54990.0,
       "in_stock": true,
-      "checked_at": "2026-10-08T04:10:20.077859"
+      "checked_at": "2026-10-08T11:25:17.388290"
     }
   },
   "last_update_id": 699733460
